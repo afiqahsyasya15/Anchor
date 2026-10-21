@@ -1,0 +1,505 @@
+rules_version = '2';
+
+// ---------------------------------------------------------------------------
+// PTAA Workflow System — Firestore security rules
+//
+// This file IS the permission system. Brief §3: "permissions must be enforced
+// server-side, at the database or API layer — not by hiding buttons in the UI."
+// The browser talks to Firestore directly, so these rules are the API layer.
+//
+// Acceptance criterion #9 — "Agent A calling the API directly for Agent B's
+// request receives an authorisation error, not data" — is satisfied here, not
+// in the JavaScript. Deleting every check in auth.js would change the error
+// message an unapproved user sees and nothing else.
+//
+// Publish with:  Firebase console → Firestore Database → Rules → paste → Publish
+// ---------------------------------------------------------------------------
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- identity ---------------------------------------------------------
+
+    function signedIn() {
+      return request.auth != null
+          && request.auth.token.email != null
+          && request.auth.token.email_verified == true;
+    }
+
+    // The document ID in users/ is the lowercased Google address. core.js does
+    // the same transformation (emailKey). Do not add Gmail dot-stripping to one
+    // side without the other — rules cannot express it, so they would diverge.
+    function myEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    function myPath() {
+      return /databases/$(database)/documents/users/$(myEmail());
+    }
+
+    function myRecord() {
+      return get(myPath()).data;
+    }
+
+    // The allowlist (brief §4.1, item 0.8). exists() is checked first because
+    // && short-circuits — without it, get() on a missing document errors.
+    function allowlisted() {
+      return signedIn()
+          && exists(myPath())
+          && myRecord().active == true;
+    }
+
+    function isAdmin() {
+      return allowlisted() && myRecord().role == 'admin';
+    }
+
+    function roleIsValid(data) {
+      return data.role == 'admin' || data.role == 'agent';
+    }
+
+    // --- users ------------------------------------------------------------
+    // users/{email}
+    //   email, role ('admin'|'agent'), active (bool),
+    //   invitedBy, invitedAt, uid, googleDisplayName, photoURL,
+    //   firstLoginAt, lastLoginAt, profileComplete,
+    //   profile { fullName, nric, phone, nickname, version, updatedAt, updatedBy }
+
+    match /users/{userEmail} {
+
+      // A signed-in person may read their own record — including finding that
+      // it does not exist, which is what produces the "not on the approved
+      // list" screen. Only an admin may list the collection.
+      allow get:  if isAdmin() || (signedIn() && userEmail == myEmail());
+      allow list: if isAdmin();
+
+      allow create: if isAdmin()
+                    && roleIsValid(request.resource.data)
+                    && request.resource.data.active is bool;
+
+      // Never delete an account record. It carries the profile version history
+      // that completed PTAAs refer to (brief §6, rule #4). Set active = false.
+      allow delete: if false;
+
+      allow update: if
+        // An admin may change anything on any record.
+        (
+          isAdmin()
+          && roleIsValid(request.resource.data)
+          && request.resource.data.active is bool
+        )
+        ||
+        // A user may write their own profile and sign-in metadata, but can
+        // never grant themselves a role or restore their own access.
+        (
+          allowlisted()
+          && userEmail == myEmail()
+          && request.resource.data.role   == resource.data.role
+          && request.resource.data.active == resource.data.active
+        );
+
+      // Immutable snapshots of each saved profile version. A later phase
+      // stamps the version used onto each PTAA, so that editing a profile can
+      // never alter a document that was already prepared.
+      match /profileVersions/{version} {
+        allow get, list: if isAdmin() || (allowlisted() && userEmail == myEmail());
+        allow create:    if isAdmin() || (allowlisted() && userEmail == myEmail());
+        allow update, delete: if false;
+      }
+    }
+
+    // --- activity log -----------------------------------------------------
+    // Append-only (brief §14.1, non-negotiable rule #11). update and delete are
+    // denied outright, so no user, admin or agent, can rewrite history — and
+    // neither can a future bug in the application code.
+
+    match /activity/{entryId} {
+      allow get, list: if isAdmin();
+
+      allow create: if allowlisted()
+                    && request.resource.data.actorEmail == myEmail()
+                    && request.resource.data.at == request.time;
+
+      allow update, delete: if false;
+    }
+
+    // --- properties --------------------------------------------------------
+    // The registry agents pick a condo from. Everyone signed in and approved
+    // needs to read it; only an admin may change it, because the name here
+    // becomes the Drive folder and part of the generated filename.
+
+    match /properties/{propertyId} {
+      allow get, list: if allowlisted();
+      allow create, update: if isAdmin();
+      allow delete: if false;          // hide it instead (active: false)
+    }
+
+    // --- PTAA identifier counter -------------------------------------------
+    // Bumped inside the same transaction that creates a request, so a failure
+    // cannot burn a number or let two requests share one. The rule pins it to
+    // "exactly one more than before" so nobody can rewind it and cause a
+    // duplicate PTAA number.
+
+    match /counters/requests {
+      allow get: if allowlisted();
+      allow create: if allowlisted() && request.resource.data.next == 2;
+      allow update: if allowlisted() && request.resource.data.next == resource.data.next + 1;
+      allow delete: if false;
+    }
+
+    // --- requests ----------------------------------------------------------
+    // Brief §3 and acceptance criterion #9: an agent must not be able to read
+    // another agent's request even by calling the API directly. `list` is
+    // allowed only for an admin, so an agent's collection query is refused
+    // outright rather than quietly filtered.
+
+    function isRequestOwner() {
+      return allowlisted() && resource.data.agentEmail == myEmail();
+    }
+
+    // Fields no one may rewrite after submission: they are the request's
+    // identity and the agent snapshot the finished document depends on.
+    function immutableFieldsIntact() {
+      return request.resource.data.ptaaId       == resource.data.ptaaId
+          && request.resource.data.agentEmail   == resource.data.agentEmail
+          && request.resource.data.agentSnapshot == resource.data.agentSnapshot
+          && request.resource.data.createdAt    == resource.data.createdAt;
+    }
+
+    function statusUnchanged() {
+      return request.resource.data.status == resource.data.status;
+    }
+
+    function moved(from, to) {
+      return resource.data.status == from && request.resource.data.status == to;
+    }
+
+    function isOpenStatus(s) {
+      return s in ['NEW','UNDER_REVIEW','CHANGES_REQUIRED','PTAA_OK',
+                   'READY_FOR_AGENT','WAITING_FOR_SIGNATURE','FINAL_CHECK','ON_HOLD'];
+    }
+
+    // The §7.2 table, admin half. Mirrors TRANSITIONS in js/model.js — change
+    // one and you must change the other.
+    function adminTransition() {
+      return moved('NEW','UNDER_REVIEW')
+          || moved('UNDER_REVIEW','CHANGES_REQUIRED')
+          || moved('UNDER_REVIEW','PTAA_OK')
+          || moved('PTAA_OK','READY_FOR_AGENT')
+          || moved('READY_FOR_AGENT','WAITING_FOR_SIGNATURE')
+          || moved('READY_FOR_AGENT','FINAL_CHECK')
+          || moved('WAITING_FOR_SIGNATURE','FINAL_CHECK')
+          // Hold from any open status, and resume back to any open status.
+          || (request.resource.data.status == 'ON_HOLD'
+              && isOpenStatus(resource.data.status)
+              && resource.data.status != 'ON_HOLD')
+          || (resource.data.status == 'ON_HOLD'
+              && isOpenStatus(request.resource.data.status)
+              && request.resource.data.status != 'ON_HOLD')
+          // Cancel from any status that is not already closed.
+          || (request.resource.data.status == 'CANCELLED'
+              && isOpenStatus(resource.data.status))
+          // Complete — see completionAllowed() for why this one has conditions
+          // when none of the others do.
+          || (moved('FINAL_CHECK', 'COMPLETED') && completionAllowed())
+          // Solo workflow (config.js → workflow.solo): one admin drafts, prints
+          // and files, so a PTAA goes straight from Draft to Filed — under the
+          // same condition: only in the write that records a real Drive upload.
+          || (moved('NEW', 'COMPLETED') && completionAllowed());
+    }
+
+    /**
+     * Rule #6: a PTAA is not completed unless the Drive upload actually
+     * succeeded. The app enforces the order in js/requests.js → completeRequest,
+     * but the app is not where a rule lives — an agent or a stray script calling
+     * the API directly must hit the same wall.
+     *
+     * So the transition to COMPLETED is only allowed when the SAME write also
+     * carries a Drive file id. There is no way to obtain one except from a real
+     * upload, so "Completed" and "filed in Drive" cannot come apart.
+     */
+    function completionAllowed() {
+      return request.resource.data.drive != null
+          && request.resource.data.drive.fileId is string
+          && request.resource.data.drive.fileId.size() > 0
+          && request.resource.data.completedBy == myEmail()
+          // The checklist is the admin's confirmation and must be untouched by
+          // this write — completing is not the moment to tick the last box.
+          && request.resource.data.finalChecklist == resource.data.finalChecklist;
+    }
+
+    // The §7.2 table, agent half.
+    function agentTransition() {
+      return moved('CHANGES_REQUIRED','UNDER_REVIEW')
+          // §9.3, the Owner change request: after a PTAA is released, the agent
+          // can send it back with a description of what the Owner wants.
+          || moved('READY_FOR_AGENT','UNDER_REVIEW')
+          || moved('READY_FOR_AGENT','WAITING_FOR_SIGNATURE');
+    }
+
+    // Things only an admin decides. An agent's write must leave them untouched,
+    // whatever else it changes.
+    function adminOnlyFieldsIntact() {
+      return request.resource.data.finalChecklist == resource.data.finalChecklist
+          && request.resource.data.signatories    == resource.data.signatories
+          && request.resource.data.workingDoc     == resource.data.workingDoc
+          && request.resource.data.dueDate        == resource.data.dueDate
+          && request.resource.data.manuallyEdited == resource.data.manuallyEdited
+          // Who prepared the document, recorded at generation time. An agent
+          // rewriting it would put someone else's name in the witness block.
+          && request.resource.data.adminSnapshot  == resource.data.adminSnapshot
+          // The Drive record is written by the completion only, never by an edit.
+          && request.resource.data.drive          == resource.data.drive
+          // The invoice is the admin's (solo workflow). get() because older
+          // requests have no invoice field at all.
+          && request.resource.data.get('invoice', null) == resource.data.get('invoice', null)
+          && request.resource.data.completedAt    == resource.data.completedAt
+          && request.resource.data.completedBy    == resource.data.completedBy
+          // The finished PDF is sent by the admin, never by the agent.
+          && request.resource.data.get('finalPdf', null) == resource.data.get('finalPdf', null)
+          // Only the admin sets the tenancy period (term, commencement, expiry).
+          && request.resource.data.get('tenancy', null) == resource.data.get('tenancy', null);
+    }
+
+    match /requests/{requestId} {
+      allow get: if isAdmin() || isRequestOwner();
+
+      // For a `list`, Firestore evaluates this against every document the query
+      // would return and fails the whole query if any one of them does not
+      // satisfy it. So an agent's query must carry
+      // where("agentEmail","==",<their address>) to succeed, and an agent asking
+      // for the whole collection is refused rather than quietly filtered —
+      // which is exactly what acceptance criterion #9 asks for.
+      allow list: if isAdmin()
+                  || (allowlisted() && resource.data.agentEmail == myEmail());
+
+      // Only the signed-in agent can create a request, and only as themselves
+      // (rule #1: the Google account determines who the Sales Agent is).
+      allow create: if allowlisted()
+                    && request.resource.data.agentEmail == myEmail()
+                    && request.resource.data.status == 'NEW'
+                    && request.resource.data.ptaaId == requestId;
+
+      allow update: if immutableFieldsIntact() && (
+           (isAdmin() && (statusUnchanged() || adminTransition()))
+        || (isRequestOwner()
+            && request.resource.data.agentEmail == myEmail()
+            && adminOnlyFieldsIntact()
+            && (
+                 agentTransition()
+                 // An agent may edit their own request only while it is theirs
+                 // to work on — before the admin picks it up, or when changes
+                 // have been asked for.
+              || (statusUnchanged()
+                  && resource.data.status in ['NEW','CHANGES_REQUIRED'])
+            ))
+      );
+
+      allow delete: if false;          // cancel it; history is never erased
+
+      match /attachments/{attachmentId} {
+        allow get, list: if isAdmin()
+          || (allowlisted() &&
+              get(/databases/$(database)/documents/requests/$(requestId)).data.agentEmail == myEmail());
+        allow create, delete: if isAdmin()
+          || (allowlisted() &&
+              get(/databases/$(database)/documents/requests/$(requestId)).data.agentEmail == myEmail());
+        allow update: if false;        // replace an image, never edit one
+      }
+
+      match /activity/{entryId} {
+        allow get, list: if isAdmin()
+          || (allowlisted() &&
+              get(/databases/$(database)/documents/requests/$(requestId)).data.agentEmail == myEmail());
+        allow create: if allowlisted()
+                      && request.resource.data.actorEmail == myEmail()
+                      && request.resource.data.at == request.time;
+        allow update, delete: if false;   // append-only, like the global log
+      }
+
+      // The Word document and the invoice, stored as base64 chunks. Only an
+      // admin reads or writes them: the Sales Agent gets the finished PDF only.
+      match /docChunks/{index} {
+        allow get, list, create, update, delete: if isAdmin();
+      }
+      match /invoiceChunks/{index} {
+        allow get, list, create, update, delete: if isAdmin();
+      }
+
+      // The finished PDF the admin sends to the Sales Agent — the one file the
+      // agent may download.
+      match /finalChunks/{index} {
+        allow get, list: if isAdmin()
+          || (allowlisted() &&
+              get(/databases/$(database)/documents/requests/$(requestId)).data.agentEmail == myEmail());
+        allow create, update, delete: if isAdmin();
+      }
+    }
+
+    // --- drafts -------------------------------------------------------------
+    // A PTAA saved half-way, before it is submitted. Private to whoever saved
+    // it — not even an admin reads another person's draft — and it can be
+    // deleted, because it is not a PTAA yet (no number, no history).
+
+    function isMyDraft(draftId) {
+      return allowlisted()
+          && get(/databases/$(database)/documents/drafts/$(draftId)).data.agentEmail == myEmail();
+    }
+
+    match /drafts/{draftId} {
+      allow get, list: if allowlisted() && resource.data.agentEmail == myEmail();
+      allow create:    if allowlisted() && request.resource.data.agentEmail == myEmail();
+      allow update:    if allowlisted() && resource.data.agentEmail == myEmail()
+                        && request.resource.data.agentEmail == myEmail();
+      allow delete:    if allowlisted() && resource.data.agentEmail == myEmail();
+
+      match /files/{fileId} {
+        allow get, list, create, delete: if isMyDraft(draftId);
+        allow update: if false;
+      }
+    }
+
+    // --- templates ---------------------------------------------------------
+    // One .docx per property (brief §5.3), stored as base64 chunks. The
+    // document ID is the property's ID, so a property can never end up with two.
+    //
+    // Everyone approved can read a template — an agent's browser needs it only
+    // indirectly, but reading it is harmless and keeps a later phase simple.
+    // Only an admin may upload, replace or remove one.
+
+    match /templates/{propertyId} {
+      allow get, list: if allowlisted();
+      allow create, update: if isAdmin()
+                            && request.resource.data.propertyId == propertyId
+                            && request.resource.data.chunkCount is int
+                            && request.resource.data.chunkCount > 0
+                            && request.resource.data.bytes is int;
+      allow delete: if isAdmin();
+
+      match /chunks/{index} {
+        allow get, list: if allowlisted();
+        allow create, update, delete: if isAdmin();
+      }
+    }
+
+    // --- notifications -----------------------------------------------------
+    // In-app only (brief §14.2 — no fake email path). A notification is written
+    // for someone else, so an admin may address one to an agent; a non-admin may
+    // only address one to themselves, which is what happens when they submit a
+    // request. Nobody can read anybody else's.
+
+    match /notifications/{noticeId} {
+      allow get, list: if allowlisted() && resource.data.forEmail == myEmail();
+
+      allow create: if allowlisted()
+                    && request.resource.data.createdBy == myEmail()
+                    && request.resource.data.readAt == null
+                    && (isAdmin() || request.resource.data.forEmail == myEmail());
+
+      // The recipient may mark it read. Nothing else about it can change, so a
+      // notification cannot be quietly reworded after the fact.
+      allow update: if allowlisted()
+                    && resource.data.forEmail == myEmail()
+                    && request.resource.data.forEmail == resource.data.forEmail
+                    && request.resource.data.text      == resource.data.text
+                    && request.resource.data.requestId == resource.data.requestId
+                    && request.resource.data.createdAt == resource.data.createdAt;
+
+      allow delete: if false;
+    }
+
+    // --- signatures --------------------------------------------------------
+    // signatures/{key}, key is either "shared:<slug>" (company signatures,
+    // including the Director's) or "user:<email>" (a person's own).
+    //
+    // A signature image is the closest thing here to a physical seal, so the
+    // rules are tight: you may read and write your own, an admin may read and
+    // write any, and nobody may list the collection except an admin. Only an
+    // admin can mark one as the Director's, and only an admin can create a
+    // shared one — a non-admin write must be their own user: key.
+
+    function isMySignature(key) {
+      return allowlisted() && key == 'user:' + myEmail();
+    }
+
+    function notClaimingDirector() {
+      return request.resource.data.isDirector == false;
+    }
+
+    match /signatures/{key} {
+      allow get:  if isAdmin() || isMySignature(key);
+      allow list: if isAdmin();
+
+      allow create, update: if isAdmin()
+        || (isMySignature(key)
+            && notClaimingDirector()
+            && request.resource.data.ownerEmail == myEmail()
+            && request.resource.data.kind == 'user');
+
+      allow delete: if isAdmin() || isMySignature(key);
+
+      match /chunks/{index} {
+        allow get, list:              if isAdmin() || isMySignature(key);
+        allow create, update, delete: if isAdmin() || isMySignature(key);
+      }
+    }
+
+    // --- property requests --------------------------------------------------
+    // An agent asking for a condo that is not on the list. They may raise one
+    // and watch their own; only an admin decides, and approving is what
+    // actually creates the property — under the spelling the admin settles on.
+
+    match /propertyRequests/{askId} {
+      allow get, list: if isAdmin()
+                       || (allowlisted() && resource.data.requestedBy == myEmail());
+
+      allow create: if allowlisted()
+                    && request.resource.data.requestedBy == myEmail()
+                    && request.resource.data.status == 'PENDING'
+                    && request.resource.data.decidedBy == null;
+
+      allow update: if isAdmin();
+      allow delete: if false;          // a declined request stays on the record
+    }
+
+    // --- Sales Agent list (solo workflow) ------------------------------------
+    // People to pick from, NOT accounts: nobody listed here can sign in. It
+    // holds I/C numbers, so only an admin can read it.
+
+    match /agents/{agentId} {
+      allow get, list, create, update: if isAdmin();
+      allow delete: if false;          // hide instead (active: false)
+    }
+
+    // --- Customer Relationship team (each condo's PIC) ------------------------
+
+    match /crdTeam/{personId} {
+      allow get, list: if allowlisted();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // --- App settings: Drive folder, invoice defaults -------------------------
+
+    match /settings/{key} {
+      allow get, list, create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // --- Invoice number counter ----------------------------------------------
+
+    match /counters/invoices {
+      allow get: if isAdmin();
+      allow create, update: if isAdmin() && request.resource.data.last is string;
+      allow delete: if false;
+    }
+
+    // --- everything else ---------------------------------------------------
+    // Firestore denies by default, so this block grants nothing new; it is here
+    // to state that no other collection is reachable until a later phase adds
+    // rules for it. Phase 4 will add /templates.
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

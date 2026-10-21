@@ -1,0 +1,844 @@
+/* ---------------------------------------------------------------------------
+   Anchor — The Blank Company
+   Brief §1: minimal, clean, professional, dense with information.
+   No animation beyond a loading spinner. Colour carries state and nothing else.
+
+   THE ONE RULE OF THIS PALETTE
+   ----------------------------
+   Brand yellow #FCFF00 measures 1.08:1 against white — invisible. Against black
+   it is 19.4:1. So yellow is a SURFACE that always carries black on it, exactly
+   the way the logo works. It is never text, never a hairline, never a border on
+   a light background. Every time it appears below, there is black sitting on it
+   or a dark field behind it.
+
+   The brand therefore lives in the chrome — the black header, the primary
+   button, the "this is yours" badge — and the working area stays a quiet warm
+   off-white, because people read this screen all day. Blue (#0055FF, the brand
+   tertiary) does the work yellow cannot: links, focus, anything that has to be
+   legible as text.
+   --------------------------------------------------------------------------- */
+
+:root {
+  /* --- brand ------------------------------------------------------------- */
+  --brand:      #fcff00;   /* primary   — surface only, always with black on it */
+  --brand-deep: #e6e900;   /* the hover/pressed step down                       */
+  --brand-tint: #fffcd6;   /* yellow diluted enough to sit under dark text      */
+  --brand-ink:  #000000;   /* what goes ON yellow, and nothing else             */
+
+  /* --- ground and ink ---------------------------------------------------- */
+  /* Warm off-white, not grey: a cool ground makes yellow look dirty. */
+  --bg:        #fafaf7;
+  --surface:   #ffffff;
+  --ink:       #1a1a1a;    /* brand neutral — softer than #000 for long reading */
+  --ink-2:     #4a4a48;
+  --muted:     #6e6e6a;
+  --line:      #e4e4dd;
+  --line-soft: #f0f0ea;
+
+  /* --- the dark field, where yellow is allowed to shine ------------------- */
+  --dark:       #101010;
+  --dark-2:     #1c1c1c;
+  --dark-line:  #2e2e2c;
+  --dark-ink:   #ffffff;
+  --dark-muted: #9a9a94;
+
+  /* --- interactive -------------------------------------------------------- */
+  /* Brand tertiary #0055FF fills well but is only 5.6:1 as text; the deeper
+     step is 7.9:1, so links stay comfortable at 13px. */
+  --accent:      #0043cc;
+  --accent-fill: #0055ff;
+  --accent-ink:  #ffffff;
+  --accent-soft: #eaf0ff;
+
+  /* --- state -------------------------------------------------------------- */
+  /* Warn is deliberately burnt orange, NOT amber: an amber warning next to a
+     yellow brand reads as brand, not as a warning. */
+  --ok:    #17663f;
+  --ok-bg: #e8f3ec;
+  --warn:    #8a4b12;
+  --warn-bg: #fbede3;
+  --err:    #b3261e;
+  --err-bg: #fcecea;
+  --off:    #5f5f5a;
+  --off-bg: #edede8;
+
+  --radius:    6px;
+  --radius-sm: 4px;
+  --shadow:    0 1px 2px rgba(26, 26, 20, .05);
+  --shadow-lift: 0 4px 16px rgba(26, 26, 20, .10);
+
+  /* Brand faces first, then a system stack — if the font host is blocked the
+     app is unaffected, which is why nothing here depends on the webfont. */
+  --font-head: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Hanken Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.55 var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, .screen-title, .stat-value { font-family: var(--font-head); }
+
+code { font-family: var(--mono); font-size: .9em; }
+a { color: var(--accent); }
+
+/* One focus treatment everywhere, in blue — yellow cannot be seen against a
+   white field, and a focus ring nobody can see is not a focus ring. */
+:focus-visible {
+  outline: 2px solid var(--accent-fill);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+/* On the dark header the rule flips: there, yellow is the most visible thing. */
+.topbar :focus-visible, .nav :focus-visible {
+  outline-color: var(--brand);
+}
+
+/* --- boot / centred layouts ---------------------------------------------- */
+
+/* Sign-in and the refusal screen sit on the dark field. It is the one moment
+   the brand can be at full strength — a few seconds, not a working day — and
+   dark is easier on the eyes than a full-bleed yellow would be. */
+.boot, .centred {
+  min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  padding: 32px 20px;
+  background: var(--dark);
+}
+.boot-inner { text-align: center; color: var(--dark-muted); }
+.boot-error { color: #ff8a80; }
+
+.spinner {
+  width: 20px; height: 20px; margin: 0 auto 10px;
+  border: 2px solid var(--dark-line);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+/* Inside the app the ground is light again, so the spinner flips back. */
+.main .spinner, .card .spinner {
+  border-color: var(--line); border-top-color: var(--accent-fill);
+}
+.spinner-sm { width: 13px; height: 13px; margin: 0 8px 0 0; display: inline-block; vertical-align: -1px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
+
+.loading { color: var(--muted); padding: 14px 0; }
+
+/* --- sign in -------------------------------------------------------------- */
+
+.signin {
+  width: 100%; max-width: 400px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lift);
+  padding: 0 32px 28px;
+  text-align: center;
+  overflow: hidden;
+}
+/* A yellow band across the top of the card, with nothing on it. Pure identity,
+   no meaning — so it does not matter that yellow-on-white fails as text. */
+.signin::before {
+  content: ""; display: block;
+  height: 6px; margin: 0 -32px 30px;
+  background: var(--brand);
+}
+.signin-logo { max-height: 48px; max-width: 200px; margin-bottom: 18px; }
+.signin-wordmark {
+  font-family: var(--mono);
+  font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 14px;
+}
+.signin-title {
+  margin: 0 0 6px; font-family: var(--font-head);
+  font-size: 21px; font-weight: 700; letter-spacing: -.02em;
+}
+.signin-sub { margin: 0 0 22px; color: var(--muted); font-size: 13px; }
+.signin-status { margin-top: 14px; }
+.signin-foot {
+  margin: 22px 0 0; padding-top: 16px;
+  border-top: 1px solid var(--line-soft);
+  color: var(--muted); font-size: 12px; line-height: 1.5;
+}
+
+/* --- refused -------------------------------------------------------------- */
+
+.denied {
+  width: 100%; max-width: 460px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--err);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lift);
+  padding: 28px 30px 24px;
+}
+.denied-mark {
+  font-family: var(--mono);
+  font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--err); font-weight: 600; margin-bottom: 12px;
+}
+.denied p { margin: 0 0 12px; }
+.denied-email {
+  display: flex; flex-direction: column; gap: 6px; align-items: flex-start;
+  background: var(--bg); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 12px 14px; margin: 14px 0;
+}
+.denied-email code { font-size: 14px; word-break: break-all; }
+.denied-actions { margin-top: 18px; }
+.detail {
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 10px 12px; font-size: 12px; white-space: pre-wrap; word-break: break-word;
+  color: var(--ink-2); margin: 0 0 12px;
+}
+
+/* --- shell ---------------------------------------------------------------- */
+
+.app { min-height: 100vh; display: flex; flex-direction: column; }
+
+/* The header is one continuous black block — bar plus navigation. Putting the
+   brand here is what lets the working area below stay quiet: the yellow gets a
+   dark field to sit on, where it is legible and looks deliberate, instead of
+   being scattered through content where it would either shout or vanish. */
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  background: var(--dark);
+  color: var(--dark-ink);
+  padding: 0 20px; height: 54px;
+}
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand-logo { max-height: 26px; max-width: 130px; }
+.brand-name {
+  font-family: var(--font-head);
+  font-weight: 700; letter-spacing: -.01em; color: var(--dark-ink);
+}
+/* The one mark that is always yellow, on the field that makes it work. */
+.brand-sep { color: var(--brand); font-weight: 700; }
+.brand-system {
+  color: var(--dark-muted); font-size: 13px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.whoami { display: flex; align-items: center; gap: 10px; }
+.whoami-email { color: var(--dark-muted); font-size: 12px; font-family: var(--mono); }
+.topbar .btn {
+  background: transparent; border-color: var(--dark-line); color: var(--dark-ink);
+}
+.topbar .btn:hover:not(:disabled) { background: var(--dark-2); border-color: #4a4a46; }
+.topbar .btn-quiet { color: var(--dark-muted); border-color: transparent; }
+.topbar .btn-quiet:hover:not(:disabled) { background: var(--dark-2); color: var(--dark-ink); }
+.topbar .badge-info { background: var(--brand); color: var(--brand-ink); }
+.topbar .badge-neutral { background: var(--dark-2); color: var(--dark-muted); }
+.topbar a { color: var(--dark-ink); }
+
+.nav {
+  display: flex; gap: 2px; align-items: stretch;
+  background: var(--dark); border-bottom: 1px solid var(--line);
+  padding: 0 12px; overflow-x: auto;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 12px 9px; font-size: 13px; text-decoration: none;
+  color: var(--dark-muted); border-bottom: 2px solid transparent; white-space: nowrap;
+}
+.nav-item:hover { color: var(--dark-ink); }
+/* 17.75:1 against the black bar. This is the payoff for putting the nav here. */
+.nav-active { color: var(--brand); border-bottom-color: var(--brand); font-weight: 600; }
+.nav-disabled { color: #5c5c58; cursor: default; }
+.nav-disabled:hover { color: #5c5c58; }
+.nav-flag {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .05em;
+  background: var(--dark-2); color: var(--dark-muted);
+  padding: 1px 5px; border-radius: 2px;
+}
+
+/* On a phone the header ran out of room: the company name wrapped onto a second
+   line and pushed "Sign out" out of its own bar. Agents work from phones, so
+   the bar drops what it can afford to lose — the system name, then the address —
+   and the company name truncates rather than wrapping. */
+.brand-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.whoami-email { max-width: 42vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 720px) {
+  .topbar { height: auto; min-height: 52px; padding: 8px 14px; gap: 10px; }
+  .brand-sep, .brand-system { display: none; }
+  .nav { padding: 0 6px; }
+}
+@media (max-width: 460px) {
+  /* Last to go, and only here: at this width the role badge plus Sign out is
+     enough to tell you which account you are in. */
+  .whoami-email { display: none; }
+}
+
+.main { flex: 1; padding: 24px 20px 48px; max-width: 1180px; width: 100%; margin: 0 auto; }
+.foot {
+  border-top: 1px solid var(--line); padding: 12px 20px;
+  color: var(--muted); font-size: 12px; background: var(--surface);
+}
+
+/* --- screens -------------------------------------------------------------- */
+
+.screen-title { margin: 0 0 5px; font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
+.screen-sub { margin: 0 0 18px; color: var(--muted); font-size: 13px; max-width: 76ch; }
+
+.card {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  margin-bottom: 16px;
+}
+.card-title {
+  margin: 0; padding: 12px 16px;
+  font-family: var(--font-head); font-size: 13px; font-weight: 600;
+  border-bottom: 1px solid var(--line-soft);
+  letter-spacing: 0;
+}
+.card-body { padding: 16px; }
+.card-body > :first-child { margin-top: 0; }
+.card-body > :last-child { margin-bottom: 0; }
+
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+.empty { color: var(--muted); font-style: italic; margin: 4px 0; }
+.bullets { margin: 0; padding-left: 20px; }
+.bullets li { margin-bottom: 6px; }
+
+/* --- stats ---------------------------------------------------------------- */
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.stat {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow);
+}
+.stat-value { font-size: 28px; font-weight: 700; line-height: 1.1; letter-spacing: -.03em; }
+.stat-label { color: var(--muted); font-size: 12px; margin-top: 3px; }
+.stat-warn .stat-value { color: var(--warn); }
+.stat-ok .stat-value { color: var(--ink); }
+
+/* --- buttons -------------------------------------------------------------- */
+
+.btn {
+  font: inherit; font-family: var(--font-body); font-size: 13px; line-height: 1;
+  padding: 8px 13px; border-radius: var(--radius-sm);
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) { background: var(--bg); border-color: #d5d5cc; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* Yellow with black on it — 19.4:1, and the one place the brand carries the
+   most important action on a screen. Deliberately used once per screen: a page
+   of yellow buttons is a page with no primary action. */
+.btn-primary {
+  background: var(--brand); border-color: var(--brand);
+  color: var(--brand-ink); font-weight: 600;
+}
+.btn-primary:hover:not(:disabled) { background: var(--brand-deep); border-color: var(--brand-deep); }
+.btn-primary:disabled { background: var(--off-bg); border-color: var(--line); color: var(--muted); opacity: 1; }
+
+.btn-quiet { border-color: transparent; background: transparent; color: var(--accent); padding: 6px 8px; }
+.btn-quiet:hover:not(:disabled) { background: var(--accent-soft); }
+.btn-quiet-danger { border-color: transparent; background: transparent; color: var(--err); padding: 6px 8px; }
+.btn-quiet-danger:hover:not(:disabled) { background: var(--err-bg); }
+
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; align-items: center; }
+.row-actions { display: flex; gap: 2px; flex-wrap: wrap; }
+
+/* --- badges --------------------------------------------------------------- */
+
+.badge {
+  display: inline-block;
+  font-size: 11px; font-weight: 600; line-height: 1;
+  padding: 4px 7px; border-radius: 3px; letter-spacing: .01em; white-space: nowrap;
+}
+.badge-neutral { background: var(--off-bg); color: var(--off); }
+.badge-info    { background: var(--accent-soft); color: var(--accent); }
+.badge-ok      { background: var(--ok-bg); color: var(--ok); }
+.badge-warn    { background: var(--warn-bg); color: var(--warn); }
+.badge-off     { background: var(--off-bg); color: var(--off); }
+/* Reserved for one thing: "this one is yours". The brand colour earns its place
+   by marking the single question the whole app exists to answer — is this
+   waiting on me? Using it anywhere else would spend that meaning. */
+.badge-brand   { background: var(--brand); color: var(--brand-ink); }
+
+/* --- forms ---------------------------------------------------------------- */
+
+.field { margin-bottom: 14px; max-width: 420px; }
+/* Labels are the mono face, per the brand's Label style. */
+.field-label {
+  display: block; font-family: var(--mono);
+  font-size: 11px; font-weight: 500; letter-spacing: .02em;
+  margin-bottom: 6px; color: var(--ink-2);
+}
+.input {
+  font: inherit; font-family: var(--font-body); font-size: 14px; width: 100%;
+  padding: 9px 11px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--ink);
+}
+.input:focus {
+  outline: none;
+  border-color: var(--accent-fill);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.input::placeholder { color: #a5a5a0; }
+.select { max-width: 180px; }
+.field-error .input { border-color: var(--err); }
+.field-msg { margin: 5px 0 0; font-size: 12px; }
+.field-msg.hint { color: var(--muted); }
+.field-msg.err  { color: var(--err); }
+.field-msg.warn { color: var(--warn); }
+
+.add-user { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+.add-user .input { max-width: 300px; }
+
+/* --- profile preview ------------------------------------------------------ */
+
+.profile-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; }
+@media (max-width: 820px) { .profile-grid { grid-template-columns: 1fr; } }
+
+.preview {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 16px; align-self: start;
+}
+.preview h3 {
+  margin: 0 0 12px; font-family: var(--mono); font-size: 10px; font-weight: 500;
+  color: var(--muted); text-transform: uppercase; letter-spacing: .08em;
+}
+.preview-block { border: 1px solid var(--line-soft); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 12px; background: var(--bg); }
+.preview-label {
+  font-family: var(--mono); font-size: 10px; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--muted); margin-bottom: 8px;
+}
+.preview-line { margin: 0; font-family: var(--mono); font-size: 13px; }
+.preview-dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0; font-size: 13px; }
+.preview-dl dt { color: var(--muted); }
+.preview-dl dd { margin: 0; font-family: var(--mono); word-break: break-word; }
+
+/* --- tables --------------------------------------------------------------- */
+
+.table-wrap { overflow-x: auto; margin: 0 -16px -16px; }
+.table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table th {
+  text-align: left; font-family: var(--mono);
+  font-size: 10px; text-transform: uppercase; letter-spacing: .02em;
+  color: var(--muted); font-weight: 500; padding: 9px 12px;
+  border-bottom: 1px solid var(--line); white-space: nowrap;
+}
+.table tbody tr:hover td { background: var(--bg); }
+.table td { padding: 9px 12px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+.table tr:last-child td { border-bottom: none; }
+.table td:first-child, .table th:first-child { padding-left: 16px; }
+.table td:last-child,  .table th:last-child  { padding-right: 16px; }
+/* Identifiers must never break: a unit number split as "A-18- / 09" reads as a
+   different unit, and half an email address is not an email address. Names and
+   addresses may wrap — that is what they do on paper too. The table scrolls
+   inside .table-wrap when the sum no longer fits. */
+.email { font-size: 12px; white-space: nowrap; margin-right: 6px; }
+.nowrap, .table td:nth-last-child(-n+2) { white-space: nowrap; }
+
+/* --- activity log --------------------------------------------------------- */
+
+.log { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.log-row {
+  display: grid; grid-template-columns: 170px 200px 1fr; gap: 12px;
+  padding: 6px 0; border-bottom: 1px solid var(--line-soft);
+}
+.log-row:last-child { border-bottom: none; }
+.log-time  { color: var(--muted); font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+.log-actor { color: var(--ink-2); font-family: var(--mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+.log-text  { color: var(--ink); }
+@media (max-width: 760px) {
+  .log-row { grid-template-columns: 1fr; gap: 2px; padding: 9px 0; }
+}
+
+/* --- build status --------------------------------------------------------- */
+
+.phases { list-style: none; margin: 0; padding: 0; }
+.phase {
+  display: grid; grid-template-columns: 26px 1fr max-content; gap: 10px; align-items: center;
+  padding: 5px 0; border-bottom: 1px solid var(--line-soft); font-size: 13px;
+}
+.phase:last-child { border-bottom: none; }
+.phase-n { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+.phase.done .phase-label { font-weight: 600; }
+.phase:not(.done) .phase-label { color: var(--muted); }
+
+/* --- notices -------------------------------------------------------------- */
+
+.notice {
+  border: 1px solid var(--line); border-left-width: 3px;
+  border-radius: var(--radius); padding: 12px 14px; margin-bottom: 14px; font-size: 13px;
+}
+.notice p { margin: 0 0 6px; }
+.notice p:last-child { margin-bottom: 0; }
+.notice-error { border-left-color: var(--err); background: var(--err-bg); }
+.notice-warn  { border-left-color: var(--warn); background: var(--warn-bg); }
+.notice-info  { border-left-color: var(--accent); background: var(--accent-soft); }
+
+/* --- toasts --------------------------------------------------------------- */
+
+.toast-host {
+  position: fixed; right: 16px; bottom: 16px; z-index: 50;
+  display: flex; flex-direction: column; gap: 8px; max-width: 380px;
+}
+.toast {
+  background: var(--ink); color: #fff; font-size: 13px;
+  padding: 10px 14px; border-radius: var(--radius);
+  box-shadow: 0 4px 14px rgba(16, 24, 40, .18);
+}
+.toast-error { background: var(--err); }
+.toast-warn  { background: var(--warn); }
+
+/* --- request forms -------------------------------------------------------- */
+
+.form-grid {
+  display: grid; gap: 0 20px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+.form-grid .field { max-width: none; }
+.field-wide { max-width: none; }
+.textarea { resize: vertical; min-height: 62px; line-height: 1.45; }
+
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+.inline-label { font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--ink-2); }
+
+/* Submit bar at the foot of a long form. Deliberately NOT position:sticky —
+   a floating bar sits on top of whatever fields happen to be at the bottom of
+   the viewport, which on this form hid the Financial inputs. */
+.form-actions {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 14px 16px; margin-bottom: 16px;
+}
+
+/* --- special terms -------------------------------------------------------- */
+
+.term-row {
+  display: grid; grid-template-columns: 24px 1fr max-content;
+  gap: 8px; align-items: center; margin-bottom: 8px;
+}
+.term-n { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+
+/* --- attachments ---------------------------------------------------------- */
+
+.thumbs { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); margin: 12px 0; }
+.thumb {
+  margin: 0; border: 1px solid var(--line); border-radius: var(--radius);
+  overflow: hidden; background: var(--bg);
+}
+.thumb img { display: block; width: 100%; height: 130px; object-fit: cover; background: #fff; }
+.thumb figcaption {
+  display: flex; flex-direction: column; gap: 5px; align-items: flex-start;
+  padding: 8px; font-size: 12px; background: var(--surface);
+}
+.thumb figcaption .select { max-width: 100%; font-size: 12px; padding: 4px 6px; }
+
+/* --- generated filename --------------------------------------------------- */
+
+.filename {
+  display: block; font-family: var(--mono); font-size: 13px; word-break: break-all;
+  background: var(--brand-tint); border: 1px solid #eeeaa8;
+  border-left: 3px solid var(--brand);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px; margin: 0 0 10px; color: var(--ink);
+}
+
+/* --- request detail ------------------------------------------------------- */
+
+.detail-head {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 14px;
+}
+.detail-head .actions { margin-top: 0; }
+.detail-dl {
+  display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px;
+  margin: 0; font-size: 13px;
+}
+.detail-dl dt { color: var(--muted); }
+.detail-dl dd { margin: 0; word-break: break-word; }
+.pre-wrap { white-space: pre-wrap; margin: 0; }
+
+.status-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+
+/* --- queue ---------------------------------------------------------------- */
+
+.filter-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.filter-row .input { max-width: 260px; }
+.filter-row .select { max-width: 200px; }
+.req-link { font-family: var(--mono); font-size: 13px; text-decoration: none; font-weight: 600; }
+.req-link:hover { text-decoration: underline; }
+
+/* --- template placeholder reference --------------------------------------- */
+
+.placeholder-groups {
+  display: grid; gap: 16px 24px; margin-top: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.ph-group h4 {
+  margin: 0 0 6px; font-size: 12px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .05em; color: var(--muted);
+}
+.ph-group ul { margin: 0 0 6px; padding-left: 16px; }
+.ph-group li { margin-bottom: 2px; }
+.ph-group code { font-size: 12px; }
+.ph-group p { margin: 0; }
+
+/* --- notifications -------------------------------------------------------- */
+
+.bell {
+  position: relative; display: inline-flex; align-items: center; gap: 6px;
+  text-decoration: none; color: var(--accent); font-size: 13px;
+  padding: 5px 8px; border-radius: var(--radius);
+}
+.bell:hover { background: var(--accent-soft); }
+.bell-count {
+  display: inline-block; min-width: 18px; text-align: center;
+  background: var(--err); color: #fff; font-size: 11px; font-weight: 600;
+  border-radius: 9px; padding: 1px 6px; line-height: 1.4;
+}
+.bell-count.hidden { display: none; }
+@media (max-width: 620px) { .bell-label { display: none; } }
+
+.notices { list-style: none; margin: 0; padding: 0; }
+.notice-row { border-bottom: 1px solid var(--line-soft); }
+.notice-row:last-child { border-bottom: none; }
+.notice-link {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  background: none; border: 0; font: inherit; color: inherit;
+  padding: 10px 4px;
+}
+.notice-link:hover { background: var(--bg); }
+.notice-row.unread .notice-text { font-weight: 600; }
+.notice-row.unread .notice-link { border-left: 3px solid var(--accent-fill); padding-left: 10px; }
+.notice-text { display: block; font-size: 13px; }
+.notice-meta { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+/* --- final checklist ------------------------------------------------------ */
+
+.checklist { list-style: none; margin: 0 0 12px; padding: 0; }
+.check-row {
+  display: grid; grid-template-columns: 20px 1fr; gap: 10px;
+  align-items: start; padding: 7px 0; border-bottom: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+.check-row:last-child { border-bottom: none; }
+.check-row label { cursor: pointer; }
+.check-row.done label { color: var(--ink-2); }
+.check { width: 16px; height: 16px; margin-top: 1px; accent-color: var(--accent-fill); }
+.check:disabled { cursor: not-allowed; }
+.check-block { display: block; color: var(--warn); font-size: 12px; margin-top: 2px; }
+
+/* --- a button that reads as a link ---------------------------------------- */
+
+.btn-link {
+  border: none; background: none; color: var(--accent); padding: 0;
+  font: inherit; text-decoration: underline; cursor: pointer;
+}
+.btn-link:hover:not(:disabled) { background: none; color: #1a4267; }
+
+/* --- utilities picker ----------------------------------------------------- */
+
+.util-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 20px; }
+@media (max-width: 860px) { .util-grid { grid-template-columns: 1fr; } }
+
+.util-rows { display: flex; flex-direction: column; gap: 2px; margin: 10px 0; }
+.util-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 250px) auto;
+  gap: 10px; align-items: center;
+  padding: 7px 0; border-bottom: 1px solid var(--line-soft);
+}
+.util-row:last-child { border-bottom: none; }
+.util-name { font-size: 13px; }
+.util-row .select { width: 100%; }
+
+.util-preview {
+  background: var(--bg); border: 1px solid var(--line-soft);
+  border-radius: 6px; padding: 12px 14px; align-self: start;
+}
+.util-list { margin: 4px 0 0; padding-left: 18px; font-size: 13px; }
+.util-list li { margin: 1px 0; }
+
+/* --- signatures ----------------------------------------------------------- */
+
+.sig-slots { display: flex; flex-direction: column; gap: 4px; }
+.sig-slot {
+  display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 16px;
+  align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line-soft);
+}
+.sig-slot:last-child { border-bottom: none; }
+@media (max-width: 720px) { .sig-slot { grid-template-columns: 1fr; } }
+
+.sig-preview-shell {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 74px; padding: 8px;
+  border: 1px dashed var(--line); border-radius: 6px; background: var(--bg);
+}
+.sig-preview-large { min-height: 130px; max-width: 380px; }
+.sig-preview { max-height: 110px; max-width: 100%; object-fit: contain; }
+
+/* --- a collapsible block -------------------------------------------------- */
+
+.fold { margin-top: 14px; }
+.fold > summary {
+  cursor: pointer; font-size: 13px; color: var(--accent);
+  padding: 6px 0; user-select: none;
+}
+
+/* --- attachment slots ----------------------------------------------------- */
+
+.slots { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.slot {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 12px 14px; background: var(--bg);
+}
+.slot-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-bottom: 4px;
+}
+.slot .thumbs { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+.slot .thumb img { height: 100px; }
+.slot .actions { margin-top: 10px; }
+
+/* --- global search -------------------------------------------------------- */
+
+.search-box { flex: 1 1 260px; max-width: 420px; min-width: 0; margin: 0; }
+.search-input {
+  background: var(--dark-2); border-color: var(--dark-line); color: var(--dark-ink);
+  font-size: 13px; padding: 7px 11px;
+}
+.search-input::placeholder { color: #7d7d78; }
+.search-input:focus {
+  border-color: var(--brand); box-shadow: none; background: #000;
+}
+/* The one on the search screen itself sits on the light ground, not the bar. */
+.search-input-lg {
+  background: var(--surface); border-color: var(--line); color: var(--ink);
+  font-size: 16px; padding: 11px 13px;
+}
+.search-input-lg::placeholder { color: #a5a5a0; }
+.search-input-lg:focus {
+  background: var(--surface); border-color: var(--accent-fill);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.search-row { max-width: 640px; }
+
+@media (max-width: 720px) {
+  /* Below the bar rather than inside it — three things do not fit on a phone. */
+  .topbar { flex-wrap: wrap; }
+  .search-box { order: 3; flex-basis: 100%; max-width: none; margin-bottom: 8px; }
+}
+
+/* --- reporting bars ------------------------------------------------------- */
+
+.bar-list { list-style: none; margin: 0; padding: 0; }
+.bar-row {
+  display: grid; grid-template-columns: minmax(90px, 190px) 1fr 34px;
+  gap: 12px; align-items: center; padding: 5px 0; font-size: 13px;
+}
+.bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-track { background: var(--line-soft); border-radius: 2px; height: 8px; overflow: hidden; }
+.bar-fill  { display: block; height: 100%; background: var(--accent-fill); border-radius: 2px; }
+.bar-n     { font-family: var(--mono); font-size: 12px; text-align: right; color: var(--ink-2); }
+
+
+/* --- solo workflow -------------------------------------------------------- */
+
+.stepper {
+  list-style: none; margin: 0 0 16px; padding: 0;
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px;
+}
+.step {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 8px 10px; font-size: 12.5px; color: var(--muted); min-width: 0;
+}
+.step span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.step-n {
+  flex: none; width: 20px; height: 20px; border-radius: 50%;
+  display: inline-grid; place-items: center;
+  font-family: var(--mono); font-size: 11px; background: var(--off-bg); color: var(--off);
+}
+.step.done { color: var(--ink-2); }
+.step.done .step-n { background: var(--ok-bg); color: var(--ok); }
+.step.now { color: var(--ink); border-color: var(--ink); font-weight: 600; }
+.step.now .step-n { background: var(--brand); color: var(--brand-ink); }
+@media (max-width: 760px) {
+  .stepper { grid-template-columns: 1fr; }
+}
+
+.screen-title .badge { vertical-align: middle; font-size: 12px; }
+.sub-title { font-family: var(--font-head); font-size: 14px; margin: 14px 0 8px; }
+.detail-dl.two-col { grid-template-columns: max-content 1fr; }
+
+.confirm-row {
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;
+  gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line-soft);
+}
+.confirm-row:last-child { border-bottom: none; }
+.confirm-row p { margin: 4px 0 0; }
+.confirm-row .actions { margin-top: 0; }
+
+.inv-head, .inv-row {
+  display: grid; grid-template-columns: 28px minmax(0, 1fr) 72px max-content;
+  gap: 8px; align-items: start;
+}
+.inv-head {
+  font-family: var(--mono); font-size: 11px; color: var(--muted);
+  padding: 10px 0 6px; border-bottom: 1px solid var(--line);
+}
+.inv-row { padding: 6px 0; border-bottom: 1px solid var(--line-soft); }
+.inv-row .textarea { min-height: 34px; font-size: 13px; }
+.inv-row .input { width: 100%; }
+.inv-n { font-family: var(--mono); font-size: 12px; color: var(--muted); padding-top: 9px; text-align: right; }
+.inv-money { margin-top: 12px; }
+@media (max-width: 620px) {
+  .inv-head { display: none; }
+  .inv-row { grid-template-columns: 22px minmax(0, 1fr) 60px; }
+  .inv-row .row-actions { grid-column: 2 / -1; }
+}
+
+.dest-line { margin: 2px 0; }
+.sign-scroll { overflow-x: auto; background: var(--off-bg); padding: 12px; border-radius: var(--radius); }
+.sign-page { position: relative; margin: 0 auto; box-shadow: var(--shadow-lift); background: #fff; }
+.sign-canvas { display: block; }
+.sign-overlay { position: absolute; inset: 0; cursor: crosshair; }
+.sign-mark { position: absolute; outline: 1px dashed var(--accent-fill); cursor: pointer; }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; }
+.filters .input { flex: 1 1 260px; }
+.filters .select { flex: 0 0 180px; }
+.inline-check { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; margin: 6px 0; }
+.check-row .tick { font-family: var(--mono); color: var(--muted); }
+.check-row.done .tick { color: var(--ok); }
+
+/* --- print ---------------------------------------------------------------- */
+
+@media print {
+  .topbar, .nav, .foot, .actions, .toast-host { display: none !important; }
+  body { background: #fff; }
+  .card { box-shadow: none; border-color: #ccc; }
+}
+
+/* The condo address is long — give it room on the Condos page. */
+.add-user #p-address { max-width: 560px; flex: 1 1 420px; }
+
+/* Choice dialog (ui.js → choose) */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex;
+  align-items: center; justify-content: center; padding: 16px; z-index: 1000; }
+.modal { background: var(--surface, #fff); color: inherit; border-radius: 8px; max-width: 520px; width: 100%;
+  padding: 20px 22px; box-shadow: 0 10px 40px rgba(0,0,0,.25); max-height: 90vh; overflow: auto; }
+.modal-title { margin: 0 0 10px; font-size: 16px; }
+.modal-choices { display: flex; flex-direction: column; gap: 10px; margin: 16px 0 8px; }
+.modal-choices .choice .btn { width: 100%; text-align: left; }
+.modal-choices .choice p { margin: 4px 2px 0; }

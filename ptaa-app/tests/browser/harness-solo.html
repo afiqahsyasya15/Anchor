@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PTAA — browser test harness (solo)</title>
+  <meta name="robots" content="noindex, nofollow">
+
+  <!-- Redirect the three Firebase CDN imports to the in-memory stub, so the
+       real application code runs with no Firebase project and no network. -->
+  <script type="importmap">
+  {
+    "imports": {
+      "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js":       "./firebase-stub.js",
+      "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js":      "./firebase-stub.js",
+      "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js": "./firebase-stub.js",
+      "/config.js": "/tests/browser/test-config-solo.js"
+    }
+  }
+  </script>
+
+  <link rel="stylesheet" href="../../styles.css">
+</head>
+<body>
+  <div id="root"><div class="boot"><div class="boot-inner"><p>harness loading…</p></div></div></div>
+
+  <script type="module">
+    import * as stub from "./firebase-stub.js";
+    window.__stub = stub;                       // the test driver uses this
+    await import("../../js/app.js");            // the real application
+    window.__ready = true;
+  </script>
+</body>
+</html>

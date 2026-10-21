@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Shown only for the instant before the app starts; app.js then sets the
+       tab title from company.systemName in config.js. -->
+  <title>Anchor</title>
+  <meta name="description" content="Internal PTAA workflow system.">
+  <meta name="robots" content="noindex, nofollow">
+
+  <!-- The Blank Company's typefaces: Sora for headings, Hanken Grotesk for
+       body, JetBrains Mono for labels and anything that must line up.
+       Every rule in styles.css names a system fallback after these, so if a
+       corporate proxy blocks fonts.googleapis.com the app looks plainer and
+       works identically. Nothing depends on the webfont loading. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" media="print" onload="this.media='all'"
+        href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+  <noscript>
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+  </noscript>
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="root">
+    <div class="boot">
+      <div class="boot-inner">
+        <div class="spinner" aria-hidden="true"></div>
+        <p>Starting…</p>
+        <noscript>
+          <p class="boot-error">This application requires JavaScript.</p>
+        </noscript>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

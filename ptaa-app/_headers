@@ -1,0 +1,4 @@
+# Cloudflare: make the browser check for a newer copy of the app's own files
+# on every visit, so a new deploy shows up without clearing the cache.
+/*
+  Cache-Control: no-cache
